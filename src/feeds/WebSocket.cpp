@@ -40,7 +40,7 @@ class WebSocket : public std::enable_shared_from_this<WebSocket> {
     void read() {
         socket.async_read(buffer,
             [self = shared_from_this()](const beast::error_code &ec, std::size_t bytes_transferred) {
-                if (ec) {return self->log_error("read", ec);}
+                if (ec) {return log_error("read", ec);}
                 self->handle_response(beast::buffers_to_string(self->buffer.data()));
                 self->buffer.consume(bytes_transferred);
                 self->read();
@@ -72,7 +72,7 @@ public:
             throw beast::system_error(ec);
         }
         if (!SSL_set_tlsext_host_name(socket.next_layer().native_handle(), host.c_str())) {
-            beast::error_code sni_ec{static_cast<int>(::ERR_get_error()), net::error::get_ssl_category()};
+            const beast::error_code sni_ec{static_cast<int>(::ERR_get_error()), net::error::get_ssl_category()};
             log_error("SNI setup", sni_ec);
             throw beast::system_error(sni_ec);
         }

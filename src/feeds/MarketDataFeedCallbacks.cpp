@@ -6,7 +6,9 @@
 #include <spdlog/spdlog.h>
 #include "boost/lockfree/queue.hpp"
 #include "nlohmann/json.hpp"
-#include "TickData.cpp"
+#include "tick/TickData.cpp"
+#include "tick/Venue.cpp"
+#include "tick/InstrumentType.cpp"
 
 using json = nlohmann::json;
 
@@ -17,10 +19,12 @@ std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::q
         ).count();
 
         auto j = json::parse(resp, nullptr, false);
+
         if (j.is_discarded()) {
             spdlog::warn("Failed to parse JSON: {}", resp);
             return;
         }
+
         if (j.contains("result") && j["result"].is_null()) {
             spdlog::info("Subscription confirmed for binance spot stream.");
             return;
@@ -29,14 +33,13 @@ std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::q
         TickData tick;
         std::memset(&tick, 0, sizeof(TickData));
 
-        std::strncpy(tick.venue, "binance", sizeof(tick.venue) - 1);
+        std::strncpy(tick.venue, VenueToString(BINANCE), sizeof(tick.venue) - 1);
         std::strncpy(tick.symbol, j.value("s", "").c_str(), sizeof(tick.symbol) - 1);
-        std::strncpy(tick.type, "spot", sizeof(tick.type) - 1);
+        std::strncpy(tick.type, InstrumentTypeToString(SPOT), sizeof(tick.type) - 1);
 
-        tick.price = std::stod(j.value("c", "0"));
+        tick.price = std::stod(j.value("p", "0"));
         tick.event_time_ms = j.value("E", 0);
         tick.received_time_ns = received_ts_ns;
-
         tick.funding_rate = NAN;
         tick.next_funding_time_ms = -1;
 
@@ -61,6 +64,7 @@ std::function<void(const std::string&)> binance_callback_futures(
             spdlog::warn("Failed to parse JSON: {}", resp);
             return;
         }
+
         if (j.contains("result") && j["result"].is_null()) {
             spdlog::info("Subscription confirmed for binance futures stream.");
             return;
@@ -85,9 +89,9 @@ std::function<void(const std::string&)> binance_callback_futures(
 
             TickData tick;
             std::memset(&tick, 0, sizeof(TickData));
-            std::strncpy(tick.venue, "binance", sizeof(tick.venue) - 1);
+            std::strncpy(tick.venue, VenueToString(BINANCE), sizeof(tick.venue) - 1);
             std::strncpy(tick.symbol, symbol.c_str(), sizeof(tick.symbol) - 1);
-            std::strncpy(tick.type, "futures", sizeof(tick.type) - 1);
+            std::strncpy(tick.type, InstrumentTypeToString(PERP), sizeof(tick.type) - 1);
 
             tick.price = std::stod(j.value("p", "0"));
             tick.event_time_ms = j.value("E", 0);
@@ -110,72 +114,3 @@ std::function<void(const std::string&)> binance_callback_futures(
         };
     };
 }
-
-std::function<void(const std::string&)> hyperliquid_callback_spot(boost::lockfree::queue<TickData> &tick_queue) {
-    return [&tick_queue](const std::string& resp) {
-        const auto received_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count();
-
-        auto j = json::parse(resp, nullptr, false);
-        if (j.is_discarded()) {
-            spdlog::warn("Failed to parse JSON: {}", resp);
-            return;
-        }
-
-        spdlog::info("Subscription confirmed for hyperliquid spot stream.");
-
-        TickData tick;
-        std::memset(&tick, 0, sizeof(TickData));
-
-        std::strncpy(tick.venue, "hyperliquid", sizeof(tick.venue) - 1);
-        std::strncpy(tick.symbol, j.value("market", "").c_str(), sizeof(tick.symbol) - 1);
-        std::strncpy(tick.type, "spot", sizeof(tick.type) - 1);
-
-        tick.price = std::stod(j.value("price", "0"));
-        tick.event_time_ms = j.value("time", 0);
-        tick.received_time_ns = received_ts_ns;
-
-        tick.funding_rate = NAN;
-        tick.next_funding_time_ms = -1;
-
-        if (!tick_queue.push(tick)) {
-            spdlog::warn("tick queue full, dropped message with timestamp {}", received_ts_ns);
-        }
-    };
-}
-
-std::function<void(const std::string&)> hyperliquid_callback_futures(boost::lockfree::queue<TickData> &tick_queue) {
-    return [&tick_queue](const std::string& resp) {
-        const auto received_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count();
-
-        auto j = json::parse(resp, nullptr, false);
-        if (j.is_discarded()) {
-            spdlog::warn("Failed to parse JSON: {}", resp);
-            return;
-        }
-
-        spdlog::info("Subscription confirmed for hyperliquid futures stream.");
-
-        TickData tick;
-        std::memset(&tick, 0, sizeof(TickData));
-
-        std::strncpy(tick.venue, "hyperliquid", sizeof(tick.venue) - 1);
-        std::strncpy(tick.symbol, j.value("market", "").c_str(), sizeof(tick.symbol) - 1);
-        std::strncpy(tick.type, "futures", sizeof(tick.type) - 1);
-
-        tick.price = std::stod(j.value("price", "0"));
-        tick.event_time_ms = j.value("time", 0);
-        tick.received_time_ns = received_ts_ns;
-
-        tick.funding_rate = NAN;
-        tick.next_funding_time_ms = -1;
-
-        if (!tick_queue.push(tick)) {
-            spdlog::warn("tick queue full, dropped message with timestamp {}", received_ts_ns);
-        }
-    };
-}
-
