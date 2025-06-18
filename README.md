@@ -2,9 +2,9 @@
 
 ## Introduction 
 
-Runs on three threads, each pinned to a different CPU core. Coordination between threads is completely lock-free: transfer between handler to consumer via boost lock-free queue and CAS to coordinate latest snapshot.
+Runs on three threads, each pinned to a different CPU core. Coordination between threads is completely lock-free.
 
-- Handler Thread: Handles socket streams asynchronously from multiple venues, unpacks it into a common structure (TickData) and pushes it onto a tick queue.
+- Handler Thread: Handles socket streams asynchronously from multiple venues, unpacks it into a common structure (TickData) and pushes it onto a lock-free tick queue.
 - Consumer Thread: Polls from the tick queue, aggregates it and adds the tick data to a lock-free price map and does CAS to update the latest snapshot atomic.
 - Snapshot Thread: Pulls the latest snapshot on a user defined frequency.
 
