@@ -9,7 +9,9 @@
 #include "tick/TickData.cpp"
 #include "tick/Venue.cpp"
 #include "tick/InstrumentType.cpp"
+#include "../utils/StringModifications.cpp"
 
+typedef std::unordered_map<std::string, std::shared_ptr<std::atomic<double>>> funding_map;
 using json = nlohmann::json;
 
 std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::queue<TickData> &tick_queue) {
@@ -51,10 +53,9 @@ std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::q
 
 std::function<void(const std::string&)> binance_callback_futures(
     boost::lockfree::queue<TickData> &tick_queue,
-    const std::shared_ptr<std::unordered_map<std::string, std::pair<double, int64_t>>> &funding_map,
-    const std::shared_ptr<std::mutex> &funding_map_mutex) {
+    std::shared_ptr<funding_map> funding_map) {
 
-    return [&tick_queue, funding_map, funding_map_mutex](const std::string& resp) {
+    return [&tick_queue, funding_map](const std::string& resp) {
         const auto received_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()
         ).count();
@@ -78,10 +79,7 @@ std::function<void(const std::string&)> binance_callback_futures(
             double rate = std::stod(j.value("r", "nan"));
             int64_t next_time = j.value("T", -1);
 
-            {
-                std::lock_guard<std::mutex> lock(*funding_map_mutex);
-                (*funding_map)[symbol] = {rate, next_time};
-            }
+            (*funding_map)[to_upper(symbol)]->store(rate);
 
             spdlog::info("funding rate update for future: symbol={}, rate={}, next_time={}", symbol, rate, next_time);
 
@@ -97,16 +95,7 @@ std::function<void(const std::string&)> binance_callback_futures(
             tick.event_time_ms = j.value("E", 0);
             tick.received_time_ns = received_ts_ns;
 
-            {
-                std::lock_guard<std::mutex> lock(*funding_map_mutex);
-                if (const auto it = funding_map->find(symbol); it != funding_map->end()) {
-                    tick.funding_rate = it->second.first;
-                    tick.next_funding_time_ms = it->second.second;
-                } else {
-                    tick.funding_rate = NAN;
-                    tick.next_funding_time_ms = -1;
-                }
-            }
+            tick.funding_rate = (*funding_map)[to_upper(symbol)]->load();
 
             if (!tick_queue.push(tick)) {
                 spdlog::warn("tick queue full, dropped message with timestamp {}", received_ts_ns);

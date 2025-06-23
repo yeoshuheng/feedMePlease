@@ -7,7 +7,6 @@
 
 #include "feeds/MarketDataFeeds.cpp"
 #include "utils/ThreadAffinity.cpp"
-#include "utils/StringModifications.cpp"
 
 typedef TickData* tick_data_ptr;
 typedef std::unordered_map<std::string, std::unordered_map <std::string, std::unique_ptr<boost::lockfree::queue<TickData>>>> pmap;

@@ -20,6 +20,7 @@ int main() {
     soc.set_default_verify_paths();
 
     boost::lockfree::queue<TickData> tick_queue(1024);
+
     auto feed_handler = MarketDataFeedHandler("btcusdt", 200, ioc, soc, tick_queue);
     feed_handler.start_feeds();
 }

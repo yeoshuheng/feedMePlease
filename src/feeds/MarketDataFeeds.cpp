@@ -10,10 +10,11 @@
 class MarketDataFeeds {
 
 public:
+
     static void start_feeds(const std::string& symbol, net::io_context& ioc, ssl::context& soc, boost::lockfree::queue<TickData> &tick_queue) {
 
-        auto const binance_futures_funding_map = std::make_shared<std::unordered_map<std::string, std::pair<double, int64_t>>>();
-        auto const binance_futures_funding_map_mutex = std::make_shared<std::mutex>();
+        auto binance_funding_map = std::make_shared<funding_map>();
+        binance_funding_map->emplace(to_upper(symbol), std::make_shared<std::atomic<double>>(-1.0));
 
         const auto binance_futures_data_feed = std::make_shared<MarketDataFeed>(
            "binance_futures_feed",
@@ -22,8 +23,7 @@ public:
            "443",
            "/ws",
            binance_callback_futures(tick_queue,
-               binance_futures_funding_map,
-               binance_futures_funding_map_mutex));
+               binance_funding_map));
 
         binance_futures_data_feed->connect();
 
