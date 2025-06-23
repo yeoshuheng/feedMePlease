@@ -6,7 +6,7 @@
 #include <iostream>
 
 #include "feeds/MarketDataFeeds.cpp"
-#include "utils/ThreadAffinity.cpp"
+#include "utils/Concurrency.cpp"
 #include "feeds/tick/TickDataBuffer.cpp"
 
 
@@ -27,6 +27,10 @@ class MarketDataFeedHandler {
     std::shared_ptr<snapshot> price_snapshot;
 
     std::atomic<bool> is_running{false};
+
+    std::atomic<int64_t> last_snapshot_time_ns{0};
+    std::atomic<int64_t> total_jitter_ns{0};
+    std::atomic<size_t> jitter_count{0};
 
     void pre_load_all_maps() {
         price_snapshot = std::make_shared<snapshot>();
@@ -71,10 +75,27 @@ class MarketDataFeedHandler {
     * Snapshot processing related code.
     */
     void process_snapshot() {
+        const int64_t expected_interval_ns = snapshot_frequency_ms * 1'000'000LL;
+
         while (is_running.load()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(snapshot_frequency_ms));
+            spin_wait(std::chrono::milliseconds(snapshot_frequency_ms));
 
             const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+
+            if (const int64_t last_ns = last_snapshot_time_ns.load(std::memory_order_acquire); last_ns != 0) {
+                const int64_t actual_interval_ns = now_ns - last_ns;
+                const int64_t jitter = actual_interval_ns - expected_interval_ns;
+
+                total_jitter_ns.fetch_add(std::abs(jitter), std::memory_order_relaxed);
+                jitter_count.fetch_add(1, std::memory_order_relaxed);
+
+                double avg_jitter = static_cast<double>(total_jitter_ns.load()) / jitter_count.load();
+
+                spdlog::info("Snapshot jitter (ns): current={} avg={}", jitter, avg_jitter);
+            }
+            last_snapshot_time_ns.store(now_ns, std::memory_order_release);
 
             std::cout << "SNAPSHOT" << "\n";
             for (auto& [type, symbol_map] : *price_snapshot) {

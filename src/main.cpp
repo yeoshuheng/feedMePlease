@@ -21,6 +21,6 @@ int main() {
 
     boost::lockfree::queue<TickData> tick_queue(1024);
 
-    auto feed_handler = MarketDataFeedHandler("btcusdt", 250, 100, ioc, soc, tick_queue);
+    auto feed_handler = MarketDataFeedHandler("btcusdt", 5, 100, ioc, soc, tick_queue);
     feed_handler.start_feeds();
 }
