@@ -6,6 +6,13 @@
 #include <mach/mach.h>
 #include <mach/thread_policy.h>
 
+void spin_wait(std::chrono::nanoseconds target_duration) {
+    using clock = std::chrono::steady_clock;
+    auto start = clock::now();
+    while (clock::now() - start < target_duration) {
+    }
+}
+
 void set_affinity(std::thread &to_pin, int core) {
     thread_affinity_policy policy;
     policy.affinity_tag = core;
