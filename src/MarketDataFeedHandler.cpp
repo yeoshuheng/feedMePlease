@@ -106,7 +106,7 @@ class MarketDataFeedHandler {
                     if (curr_snapshot.event_time_ms == 0) {
                         continue;
                     }
-                    if (now_ms - curr_snapshot.received_time_ns > max_lag_ms) {
+                    if (std::abs(now_ms - curr_snapshot.event_time_ms) > max_lag_ms) {
                         spdlog::warn("Dropping stale tick for {} {}: event_time_ms={}, now_ms={}",
                                      type, symbol, curr_snapshot.event_time_ms, now_ms);
                         continue;

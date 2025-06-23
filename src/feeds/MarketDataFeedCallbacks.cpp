@@ -40,7 +40,7 @@ std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::q
         std::strncpy(tick.type, InstrumentTypeToString(SPOT), sizeof(tick.type) - 1);
 
         tick.price = std::stod(j.value("p", "0"));
-        tick.event_time_ms = j.value("E", 0);
+        tick.event_time_ms = j.value<int64_t>("E", 0);
         tick.received_time_ns = received_ts_ns;
         tick.funding_rate = NAN;
         tick.next_funding_time_ms = -1;
@@ -92,7 +92,7 @@ std::function<void(const std::string&)> binance_callback_futures(
             std::strncpy(tick.type, InstrumentTypeToString(PERP), sizeof(tick.type) - 1);
 
             tick.price = std::stod(j.value("p", "0"));
-            tick.event_time_ms = j.value("E", 0);
+            tick.event_time_ms = j.value<int64_t>("E", 0);
             tick.received_time_ns = received_ts_ns;
 
             tick.funding_rate = (*funding_map)[to_upper(symbol)]->load();
