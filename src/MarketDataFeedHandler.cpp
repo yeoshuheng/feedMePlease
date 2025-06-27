@@ -160,6 +160,7 @@ public:
 
         io_thread.join();
         consumer_thread.join();
+        snapshot_thread.join();
     }
 
     void kill_feeds() {
