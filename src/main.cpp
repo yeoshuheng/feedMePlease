@@ -19,8 +19,12 @@ int main() {
     soc.load_verify_file("/opt/homebrew/etc/openssl@3/cert.pem");
     soc.set_default_verify_paths();
 
-    boost::lockfree::queue<TickData> tick_queue(1024);
+    boost::lockfree::queue<TickData> perp_tick_queue(1024);
+    boost::lockfree::queue<TickData> spot_tick_queue(1024);
 
-    auto feed_handler = MarketDataFeedHandler("btcusdt", 100, 100, ioc, soc, tick_queue);
+
+    auto feed_handler = MarketDataFeedHandler(
+        "btcusdt", 500, ioc, soc, spot_tick_queue, perp_tick_queue);
+
     feed_handler.start_feeds();
 }

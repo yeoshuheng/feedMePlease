@@ -14,8 +14,11 @@
 typedef std::unordered_map<std::string, std::shared_ptr<std::atomic<double>>> funding_map;
 using json = nlohmann::json;
 
-std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::queue<TickData> &tick_queue) {
-    return [&tick_queue](const std::string& resp) {
+std::function<void(const std::string&)> binance_callback_spot(
+    boost::lockfree::queue<TickData> &tick_queue,
+    int64_t offset_t) {
+
+    return [&tick_queue, offset_t](const std::string& resp) {
         const auto received_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()
         ).count();
@@ -32,30 +35,35 @@ std::function<void(const std::string&)> binance_callback_spot(boost::lockfree::q
             return;
         }
 
+        const std::string symbol = j.value("s", "");
+        const double price = std::stod(j.value("p", "0"));
+        const int64_t event_time = j["E"].get<int64_t>() + offset_t;
+
         TickData tick;
         std::memset(&tick, 0, sizeof(TickData));
 
         std::strncpy(tick.venue, VenueToString(BINANCE), sizeof(tick.venue) - 1);
-        std::strncpy(tick.symbol, j.value("s", "").c_str(), sizeof(tick.symbol) - 1);
+        std::strncpy(tick.symbol, symbol.c_str(), sizeof(tick.symbol) - 1);
         std::strncpy(tick.type, InstrumentTypeToString(SPOT), sizeof(tick.type) - 1);
 
-        tick.price = std::stod(j.value("p", "0"));
-        tick.event_time_ms = j.value<int64_t>("E", 0);
+        tick.price = price;
+        tick.event_time_ms = event_time;
         tick.received_time_ns = received_ts_ns;
         tick.funding_rate = NAN;
         tick.next_funding_time_ms = -1;
 
         if (!tick_queue.push(tick)) {
-            spdlog::warn("tick queue full, dropped message with timestamp {}", received_ts_ns);
+            spdlog::warn("tick queue full, dropped SPOT message {}", received_ts_ns);
         }
     };
 }
 
 std::function<void(const std::string&)> binance_callback_futures(
     boost::lockfree::queue<TickData> &tick_queue,
-    std::shared_ptr<funding_map> funding_map) {
+    std::shared_ptr<funding_map> funding_map,
+    int64_t offset_t) {
 
-    return [&tick_queue, funding_map](const std::string& resp) {
+    return [&tick_queue, funding_map, offset_t](const std::string& resp) {
         const auto received_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()
         ).count();
@@ -81,9 +89,10 @@ std::function<void(const std::string&)> binance_callback_futures(
 
             (*funding_map)[to_upper(symbol)]->store(rate);
 
-            spdlog::info("funding rate update for future: symbol={}, rate={}, next_time={}", symbol, rate, next_time);
-
         } else if (event_type == "aggTrade") {
+
+            const double price = std::stod(j.value("p", "0"));
+            const int64_t event_time = j["E"].get<int64_t>() + offset_t;
 
             TickData tick;
             std::memset(&tick, 0, sizeof(TickData));
@@ -91,15 +100,17 @@ std::function<void(const std::string&)> binance_callback_futures(
             std::strncpy(tick.symbol, symbol.c_str(), sizeof(tick.symbol) - 1);
             std::strncpy(tick.type, InstrumentTypeToString(PERP), sizeof(tick.type) - 1);
 
-            tick.price = std::stod(j.value("p", "0"));
-            tick.event_time_ms = j.value<int64_t>("E", 0);
+            tick.price = price;
+            tick.event_time_ms = event_time;
             tick.received_time_ns = received_ts_ns;
 
             tick.funding_rate = (*funding_map)[to_upper(symbol)]->load();
+            tick.next_funding_time_ms = -1;
 
             if (!tick_queue.push(tick)) {
-                spdlog::warn("tick queue full, dropped message with timestamp {}", received_ts_ns);
+                spdlog::warn("tick queue full, dropped PERP message {}", received_ts_ns);
             }
+
         };
     };
 }

@@ -1,19 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
-
 project(feedMePlease VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-execute_process(
-        COMMAND brew --prefix boost
-        OUTPUT_VARIABLE BOOST_ROOT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-set(BOOST_INCLUDEDIR "${BOOST_ROOT}/include")
-list(APPEND CMAKE_PREFIX_PATH "${BOOST_ROOT}")
 find_package(Boost REQUIRED COMPONENTS system)
+find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -23,7 +18,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
-
 FetchContent_Declare(
         json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -31,19 +25,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-
-execute_process(
-        COMMAND brew --prefix openssl@3
-        OUTPUT_VARIABLE OPENSSL_ROOT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-list(APPEND CMAKE_PREFIX_PATH "${OPENSSL_ROOT}")
-find_package(OpenSSL REQUIRED)
-
-add_executable(feedMePlease
-        src/main.cpp
-)
+add_executable(feedMePlease src/main.cpp)
 
 target_link_libraries(feedMePlease PRIVATE
         Boost::system
@@ -51,4 +33,6 @@ target_link_libraries(feedMePlease PRIVATE
         nlohmann_json::nlohmann_json
         OpenSSL::SSL
         OpenSSL::Crypto
+        Threads::Threads
+        CURL::libcurl
 )

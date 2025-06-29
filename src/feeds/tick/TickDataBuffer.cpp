@@ -6,8 +6,11 @@
 class TickDataBuffer {
 
 public:
-    std::array<std::unique_ptr<TickData>, 2> data_buffer{{nullptr, nullptr}};
     std::atomic<uint64_t> version{0};
+    TickData data_buffer[2];
 
-    TickDataBuffer() = default;
+    TickDataBuffer() {
+        data_buffer[0] = {};
+        data_buffer[1] = {};
+    }
 };
